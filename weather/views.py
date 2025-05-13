@@ -19,7 +19,8 @@ def index(request):
 def get_cities(request):
     country_code = request.GET.get('country')
     if not country_code:
-        return HttpResponse("No country code provided", status=400)
+        return render(request, 'weather/cities_dropdown_list_options.html', 
+                     {'empty_message': 'Select a country first'})
     
     # Get cities for the selected country
     cities = City.objects.filter(
@@ -27,7 +28,8 @@ def get_cities(request):
     ).values_list('name', flat=True).order_by('name')
     
     if not cities:
-        return HttpResponse("No cities found for the selected country.", status=404)
+        return render(request, 'weather/cities_dropdown_list_options.html', 
+                     {'empty_message': 'No cities found for this country'})
     
     return render(request, 'weather/cities_dropdown_list_options.html', {'cities': cities})
 
@@ -214,3 +216,22 @@ def get_map_weather(request):
             return JsonResponse(data)
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)
+
+def get_location_details(request):
+    lat = request.GET.get('lat')
+    lon = request.GET.get('lon')
+    
+    if not lat or not lon:
+        return JsonResponse({'error': 'Missing coordinates'}, status=400)
+        
+    try:
+        url = f"http://api.openweathermap.org/geo/1.0/reverse?lat={lat}&lon={lon}&limit=1&appid={settings.OPENWEATHER_API_KEY}"
+        response = requests.get(url)
+        data = response.json()
+        
+        if not data:
+            return JsonResponse({'error': 'Location not found'}, status=404)
+            
+        return JsonResponse(data[0])
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
