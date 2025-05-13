@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="weather-container">
+    <div class="text-center mb-5">
+        <h2 class="display-4 text-white mb-3 weather-title">Check Current Weather</h2>
+        <p class="lead text-white opacity-75 weather-subtitle">Select a country and city to view current weather conditions</p>
+        <button id="detect-location" class="btn btn-light mt-2">
+            <i class="bi bi-geo-alt"></i> Use My Location
+        </button>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card bg-white bg-opacity-25 backdrop-blur p-4 shadow-lg">
+                <form id="weather-form" class="row g-4">
+                    <!-- Country Selection -->
+                    <div class="col-md-6">
+                        <label for="country" class="form-label text-white">Country</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent border-end-0">
+                                <i class="bi bi-globe2"></i>
+                            </span>
+                            <select id="country" name="country" class="form-select border-start-0"
+                                    hx-get="{% url 'get_cities' %}"
+                                    hx-target="#city-field"
+                                    hx-trigger="change">
+                                <option value="" disabled selected>Select a country</option>
+                                {% for code, name in countries %}
+                                    <option value="{{ code }}">{{ name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- City Selection -->
+                    <div class="col-md-6">
+                        <label for="city" class="form-label text-white">City</label>
+                        <div id="city-field">
+                            <div class="input-group">
+                                <span class="input-group-text bg-transparent border-end-0">
+                                    <i class="bi bi-building"></i>
+                                </span>
+                                <select id="city" name="city" class="form-select border-start-0" disabled>
+                                    <option value="">Select country first</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Weather Data Display -->
+            <div id="weather-data" class="mt-4">
+                <!-- Weather information will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .weather-container {
+        padding: 3rem 0;
+    }
+    
+    .backdrop-blur {
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+    
+    .form-label {
+        font-weight: 500;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+    
+    .input-group-text {
+        color: #0077b6;
+    }
+    
+    .form-select {
+        background-color: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        font-weight: 500;
+    }
+    
+    .form-select:focus {
+        background-color: rgba(255, 255, 255, 0.95);
+        box-shadow: 0 0 0 0.25rem rgba(0, 119, 182, 0.25);
+    }
+    
+    .card {
+        border-radius: 1rem;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    @media (max-width: 768px) {
+        .weather-container {
+            padding: 1.5rem 0;
+        }
+        
+        .col-md-8 {
+            padding: 0 1rem;
+        }
+    }
+</style>
+
+<!-- Add Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Function to handle successful location retrieval
+    function handleLocation(position) {
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+        
+        // Make request to reverse geocoding API to get city and country
+        fetch(`https://api.openweathermap.org/geo/1.0/reverse?lat=${latitude}&lon=${longitude}&limit=1&appid={{ api_key }}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.length > 0) {
+                    const location = data[0];
+                    
+                    // Set country in dropdown
+                    const countrySelect = document.getElementById('country');
+                    const countryOption = Array.from(countrySelect.options)
+                        .find(option => option.text.includes(location.country));
+                    
+                    if (countryOption) {
+                        countrySelect.value = countryOption.value;
+                        // Trigger the HTMX request to load cities
+                        htmx.trigger(countrySelect, 'change');
+                        
+                        // Wait for cities to load, then select the correct city
+                        setTimeout(() => {
+                            const citySelect = document.getElementById('city');
+                            const cityOption = Array.from(citySelect.options)
+                                .find(option => option.text.includes(location.name));
+                            
+                            if (cityOption) {
+                                citySelect.value = cityOption.value;
+                                // Trigger form submission
+                                document.getElementById('weather-form').dispatchEvent(
+                                    new Event('submit', { bubbles: true })
+                                );
+                            }
+                        }, 1000); // Wait for cities to load
+                    }
+                }
+            })
+            .catch(error => console.error('Error:', error));
+    }
+
+    // Function to handle location errors
+    function handleLocationError(error) {
+        console.error('Error getting location:', error);
+    }
+
+    // Check if geolocation is available
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(handleLocation, handleLocationError);
+    }
+    
+    // Also handle the manual location button
+    document.getElementById('detect-location').addEventListener('click', function(e) {
+        e.preventDefault();
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(handleLocation, handleLocationError);
+        }
+    });
+});
+</script>
+{% endblock %}

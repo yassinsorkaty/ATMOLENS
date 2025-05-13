@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12 mb-3">
+            <div class="input-group">
+                <input type="text" id="location-search" class="form-control" placeholder="Search location...">
+                <button class="btn btn-primary" type="button" onclick="searchLocation()">Search</button>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card shadow-lg">
+                <div class="card-body">
+                    <h3 class="card-title mb-4">Interactive Weather Map</h3>
+                    <div id="weathermap" style="height: 600px; border-radius: 10px;"></div>
+                    <div class="mt-3">
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-primary" onclick="setLayer('temp')">Temperature</button>
+                            <button type="button" class="btn btn-info" onclick="setLayer('clouds')">Clouds</button>
+                            <button type="button" class="btn btn-warning" onclick="setLayer('precipitation')">Precipitation</button>
+                            <button type="button" class="btn btn-danger" onclick="setLayer('wind')">Wind</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-lg" id="weather-details" style="display: none;">
+                <div class="card-body">
+                    <h4 class="card-title">Weather Details</h4>
+                    <div id="weather-info"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Leaflet CSS and JS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    var map = L.map('weathermap').setView([20, 0], 2);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    var weatherLayer = null;
+    var currentMarker = null;
+    const apiKey = '{{ api_key }}';
+
+    // Add click handler to map
+    map.on('click', async function(e) {
+        const lat = e.latlng.lat;
+        const lng = e.latlng.lng;
+        await getWeatherForLocation(lat, lng);
+    });
+
+    async function getWeatherForLocation(lat, lng) {
+        try {
+            const response = await fetch(`/get_map_weather/?lat=${lat}&lon=${lng}`);
+            const data = await response.json();
+            
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            // Update weather details panel
+            displayWeatherInfo(data);
+
+            // Update or add marker
+            if (currentMarker) {
+                map.removeLayer(currentMarker);
+            }
+            currentMarker = L.marker([lat, lng])
+                .addTo(map)
+                .bindPopup(`${data.name}: ${Math.round(data.main.temp)}°C`)
+                .openPopup();
+
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error fetching weather data. Please try again.');
+        }
+    }    function displayWeatherInfo(data) {
+        const weatherInfo = document.getElementById('weather-info');
+        const detailsCard = document.getElementById('weather-details');
+        
+        // Calculate local time using timezone offset
+        const localTime = new Date(Date.now() + (data.timezone * 1000));
+        const timeString = localTime.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+            timeZone: 'UTC'
+        });
+        const dateString = localTime.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            timeZone: 'UTC'
+        });
+        
+        weatherInfo.innerHTML = `
+            <div class="weather-details">
+                <h5>${data.name}, ${data.sys.country}</h5>
+                <p class="text-muted mb-3">
+                    <i class="bi bi-clock"></i> Local Time: ${timeString}
+                    <br>
+                    <small>${dateString}</small>
+                </p>
+                <div class="d-flex align-items-center mb-3">
+                    <img src="https://openweathermap.org/img/wn/${data.weather[0].icon}@2x.png" alt="Weather icon" style="width: 50px;">
+                    <span class="h2 mb-0 ms-2">${Math.round(data.main.temp)}°C</span>
+                </div>
+                <p class="mb-2"><strong>Weather:</strong> ${data.weather[0].description}</p>
+                <p class="mb-2"><strong>Feels like:</strong> ${Math.round(data.main.feels_like)}°C</p>
+                <p class="mb-2"><strong>Humidity:</strong> ${data.main.humidity}%</p>
+                <p class="mb-2"><strong>Wind:</strong> ${data.wind.speed} m/s</p>
+                <p class="mb-2"><strong>Pressure:</strong> ${data.main.pressure} hPa</p>
+            </div>
+        `;
+        detailsCard.style.display = 'block';
+    }
+
+    async function searchLocation() {
+        const query = document.getElementById('location-search').value;
+        if (!query) return;
+
+        try {
+            const response = await fetch(`https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(query)}&limit=1&appid=${apiKey}`);
+            const data = await response.json();
+
+            if (data && data.length > 0) {
+                const { lat, lon } = data[0];
+                map.setView([lat, lon], 10);
+                await getWeatherForLocation(lat, lon);
+            } else {
+                alert('Location not found. Please try another search term.');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error searching location. Please try again.');
+        }
+    }
+
+    // Handle Enter key in search input
+    document.getElementById('location-search').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            searchLocation();
+        }
+    });
+
+    function setLayer(type) {
+        if (weatherLayer) {
+            map.removeLayer(weatherLayer);
+        }
+
+        let layer;
+        switch(type) {
+            case 'temp':
+                layer = 'temp_new';
+                break;
+            case 'clouds':
+                layer = 'clouds_new';
+                break;
+            case 'precipitation':
+                layer = 'precipitation_new';
+                break;
+            case 'wind':
+                layer = 'wind_new';
+                break;
+            default:
+                layer = 'temp_new';
+        }
+
+        weatherLayer = L.tileLayer(`https://tile.openweathermap.org/map/${layer}/{z}/{x}/{y}.png?appid=${apiKey}`, {
+            attribution: '© OpenWeatherMap',
+            maxZoom: 18
+        }).addTo(map);
+    }
+
+    // Set default layer to temperature
+    setLayer('temp');
+</script>
+
+<style>
+    .btn-group .btn {
+        padding: 0.5rem 1.5rem;
+        font-weight: 500;
+    }
+    .leaflet-container {
+        font-family: 'Poppins', sans-serif;
+    }
+    .weather-details {
+        padding: 10px;
+    }
+    .weather-details h5 {
+        margin-bottom: 15px;
+        color: #2c3e50;
+    }
+    .weather-details p {
+        color: #34495e;
+    }
+    #location-search {
+        border-radius: 4px 0 0 4px;
+    }
+    #location-search + button {
+        border-radius: 0 4px 4px 0;
+    }
+    .weather-details img {
+        filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.2));
+    }
+</style>
+{% endblock %}

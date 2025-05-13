@@ -1,0 +1,10 @@
+<select name="city" id="city" class="form-select"
+        hx-get="{% url 'get_weather' %}"
+        hx-target="#weather-data"
+        hx-trigger="change"
+        hx-include="#country">
+    <option value="" disabled selected>Type to search city...</option>
+    {% for city in cities %}
+        <option value="{{ city }}">{{ city }}</option>
+    {% endfor %}
+</select>

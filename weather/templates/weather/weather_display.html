@@ -1,0 +1,63 @@
+{% if error %}
+<div class="alert alert-danger text-center mx-auto">Error: {{ error }}</div>
+{% else %}
+<div class="d-flex justify-content-center w-100">
+    <!-- Current Weather Card -->
+    <div class="card text-dark bg-white mb-3 w-100">
+        <div class="card-body">
+            <h5 class="card-title">{{ city }} - Current Weather</h5>
+            <p class="card-text">
+                <strong>{{ temperature }}°C</strong> – {{ description }}<br>
+                Humidity: {{ humidity }}%
+            </p>
+            <img src="https://openweathermap.org/img/wn/{{ icon }}@2x.png"
+                 alt="Weather icon">            {% if recommendations %}
+            <div class="mt-4">
+                <h5 class="mb-3">Weather Recommendations</h5>
+                <div class="row g-3">
+                    {% for rec in recommendations %}
+                    <div class="col-md-6">
+                        <div class="alert alert-{{ rec.type }} d-flex align-items-center" role="alert">
+                            <i class="bi {{ rec.icon }} fs-4 me-2"></i>
+                            <div>
+                                <h6 class="alert-heading mb-1">{{ rec.title }}</h6>
+                                <p class="mb-0 small">{{ rec.text }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Forecast Section -->
+<div class="mt-4">
+    <h5 class="text-white mb-3">Next 24 Hours Forecast</h5>
+    <div class="row g-3">
+        {% for item in forecast %}
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2">
+                        <span class="text-muted">{{ item.datetime|date:"D" }}</span><br>
+                        <strong class="text-primary">{{ item.datetime|date:"H:i" }}</strong>
+                    </h6>
+                    <img src="https://openweathermap.org/img/wn/{{ item.icon }}.png"
+                         alt="Weather icon">
+                    <p class="card-text mb-0">
+                        <strong>{{ item.temp }}°C</strong>
+                    </p>
+                    <small>{{ item.description }}</small>
+                    <p class="card-text">
+                        <small class="text-muted">Humidity: {{ item.humidity }}%</small>
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
