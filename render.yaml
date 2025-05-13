@@ -1,0 +1,24 @@
+databases:
+  - name: weatherapp_db
+    databaseName: weatherapp
+    user: weatherapp_user
+    plan: free
+
+services:
+  - type: web
+    name: weatherapp
+    runtime: python
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn weather_project.wsgi:application"
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: weatherapp_db
+          property: connectionString
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: OPENWEATHER_API_KEY
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.9.0
