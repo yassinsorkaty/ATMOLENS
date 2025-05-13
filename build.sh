@@ -10,3 +10,7 @@ python manage.py collectstatic --no-input
 
 # Run migrations
 python manage.py migrate
+
+# Populate cities database
+python manage.py cities_light
+python manage.py migrate
