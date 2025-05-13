@@ -51,6 +51,8 @@ INSTALLED_APPS = [
     'weather',     
 ]
 
+CITIES_LIGHT_INDEX_SEARCH_NAMES = False
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',  # Add whitenoise
