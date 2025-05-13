@@ -1,10 +1,19 @@
-<select name="city" id="city" class="form-select"
-        hx-get="{% url 'get_weather' %}"
-        hx-target="#weather-data"
-        hx-trigger="change"
-        hx-include="#country">
-    <option value="" disabled selected>Type to search city...</option>
-    {% for city in cities %}
-        <option value="{{ city }}">{{ city }}</option>
-    {% endfor %}
-</select>
+<div class="input-group">
+    <span class="input-group-text bg-transparent border-end-0">
+        <i class="bi bi-building"></i>
+    </span>
+    <select name="city" id="city" class="form-select border-start-0"
+            hx-get="{% url 'get_weather' %}"
+            hx-target="#weather-data"
+            hx-trigger="change"
+            hx-include="#country">
+        {% if empty_message %}
+            <option value="" disabled selected>{{ empty_message }}</option>
+        {% else %}
+            <option value="" disabled selected>Select a city...</option>
+            {% for city in cities %}
+                <option value="{{ city }}">{{ city }}</option>
+            {% endfor %}
+        {% endif %}
+    </select>
+</div>

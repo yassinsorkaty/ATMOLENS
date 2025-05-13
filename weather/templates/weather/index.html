@@ -110,63 +110,95 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Function to handle successful location retrieval
-    function handleLocation(position) {
-        const latitude = position.coords.latitude;
-        const longitude = position.coords.longitude;
-        
-        // Make request to reverse geocoding API to get city and country
-        fetch(`https://api.openweathermap.org/geo/1.0/reverse?lat=${latitude}&lon=${longitude}&limit=1&appid={{ api_key }}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data && data.length > 0) {
-                    const location = data[0];
+    const detectLocationBtn = document.getElementById('detect-location');
+    const countrySelect = document.getElementById('country');
+
+    function showError(message) {
+        alert(message);
+        console.error(message);
+    }
+
+    async function handleLocation(position) {
+        try {
+            const { latitude, longitude } = position.coords;
+            const response = await fetch(
+                `https://api.openweathermap.org/geo/1.0/reverse?lat=${latitude}&lon=${longitude}&limit=1&appid={{ api_key }}`
+            );
+            
+            if (!response.ok) {
+                throw new Error('Failed to fetch location data');
+            }
+
+            const data = await response.json();
+            
+            if (data && data.length > 0) {
+                const location = data[0];
+                
+                // Find and select the country
+                const countryOptions = Array.from(countrySelect.options);
+                const countryOption = countryOptions.find(option => 
+                    option.text.includes(location.country)
+                );
+
+                if (countryOption) {
+                    countrySelect.value = countryOption.value;
                     
-                    // Set country in dropdown
-                    const countrySelect = document.getElementById('country');
-                    const countryOption = Array.from(countrySelect.options)
-                        .find(option => option.text.includes(location.country));
+                    // Trigger HTMX request for cities
+                    htmx.trigger(countrySelect, 'change');
                     
-                    if (countryOption) {
-                        countrySelect.value = countryOption.value;
-                        // Trigger the HTMX request to load cities
-                        htmx.trigger(countrySelect, 'change');
-                        
-                        // Wait for cities to load, then select the correct city
-                        setTimeout(() => {
-                            const citySelect = document.getElementById('city');
-                            const cityOption = Array.from(citySelect.options)
-                                .find(option => option.text.includes(location.name));
+                    // Wait for cities to load and select the correct city
+                    setTimeout(() => {
+                        const citySelect = document.getElementById('city');
+                        if (citySelect) {
+                            const cityOptions = Array.from(citySelect.options);
+                            const cityOption = cityOptions.find(option => 
+                                option.text.toLowerCase().includes(location.name.toLowerCase())
+                            );
                             
                             if (cityOption) {
                                 citySelect.value = cityOption.value;
-                                // Trigger form submission
-                                document.getElementById('weather-form').dispatchEvent(
-                                    new Event('submit', { bubbles: true })
-                                );
+                                htmx.trigger(citySelect, 'change');
                             }
-                        }, 1000); // Wait for cities to load
-                    }
+                        }
+                    }, 1000);
+                } else {
+                    showError('Could not find your country in our database');
                 }
-            })
-            .catch(error => console.error('Error:', error));
+            }
+        } catch (error) {
+            showError('Error fetching location data: ' + error.message);
+        }
     }
 
-    // Function to handle location errors
     function handleLocationError(error) {
-        console.error('Error getting location:', error);
+        switch(error.code) {
+            case error.PERMISSION_DENIED:
+                showError("Please allow location access to use this feature.");
+                break;
+            case error.POSITION_UNAVAILABLE:
+                showError("Location information is unavailable.");
+                break;
+            case error.TIMEOUT:
+                showError("Location request timed out.");
+                break;
+            default:
+                showError("An unknown error occurred.");
+                break;
+        }
     }
 
-    // Check if geolocation is available
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(handleLocation, handleLocationError);
-    }
-    
-    // Also handle the manual location button
-    document.getElementById('detect-location').addEventListener('click', function(e) {
+    detectLocationBtn.addEventListener('click', function(e) {
         e.preventDefault();
         if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(handleLocation, handleLocationError);
+            detectLocationBtn.disabled = true;
+            detectLocationBtn.innerHTML = '<i class="bi bi-geo-alt"></i> Detecting location...';
+            navigator.geolocation.getCurrentPosition(handleLocation, handleLocationError, {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            });
+        } else {
+            showError("Geolocation is not supported by this browser.");
         }
     });
 });
