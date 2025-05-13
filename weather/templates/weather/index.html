@@ -19,16 +19,22 @@
                         <div class="input-group">
                             <span class="input-group-text bg-transparent border-end-0">
                                 <i class="bi bi-globe2"></i>
-                            </span>
-                            <select id="country" name="country" class="form-select border-start-0"
+                            </span>                            <select id="country" name="country" class="form-select border-start-0"
                                     hx-get="{% url 'get_cities' %}"
                                     hx-target="#city-field"
-                                    hx-trigger="change">
+                                    hx-swap="outerHTML"
+                                    hx-trigger="change"
+                                    hx-indicator="#loading-cities">
                                 <option value="" disabled selected>Select a country</option>
                                 {% for code, name in countries %}
                                     <option value="{{ code }}">{{ name }}</option>
                                 {% endfor %}
                             </select>
+                            <div id="loading-cities" class="htmx-indicator">
+                                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -91,6 +97,20 @@
         border-radius: 1rem;
         border: 1px solid rgba(255, 255, 255, 0.2);
     }
+
+    .htmx-indicator {
+        display: none;
+        position: absolute;
+        right: 40px;
+        top: 50%;
+        transform: translateY(-50%);
+    }
+    .htmx-request .htmx-indicator {
+        display: block;
+    }
+    .input-group {
+        position: relative;
+    }
     
     @media (max-width: 768px) {
         .weather-container {
@@ -112,91 +132,105 @@
 document.addEventListener('DOMContentLoaded', function() {
     const detectLocationBtn = document.getElementById('detect-location');
     const countrySelect = document.getElementById('country');
+    const cityField = document.getElementById('city-field');
 
     function showError(message) {
-        alert(message);
-        console.error(message);
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-danger mt-3';
+        alertDiv.textContent = message;
+        document.querySelector('.weather-container').insertBefore(alertDiv, document.querySelector('.row'));
+        setTimeout(() => alertDiv.remove(), 5000);
     }
 
     async function handleLocation(position) {
         try {
             const { latitude, longitude } = position.coords;
-            const response = await fetch(
-                `https://api.openweathermap.org/geo/1.0/reverse?lat=${latitude}&lon=${longitude}&limit=1&appid={{ api_key }}`
-            );
             
-            if (!response.ok) {
-                throw new Error('Failed to fetch location data');
-            }
-
+            // First, get the location details using OpenWeather's geocoding API
+            const response = await fetch(`https://api.openweathermap.org/geo/1.0/reverse?lat=${latitude}&lon=${longitude}&limit=1&appid={{ api_key }}`);
             const data = await response.json();
             
-            if (data && data.length > 0) {
-                const location = data[0];
-                
-                // Find and select the country
-                const countryOptions = Array.from(countrySelect.options);
-                const countryOption = countryOptions.find(option => 
-                    option.text.includes(location.country)
-                );
+            if (!data || data.length === 0) {
+                throw new Error('Location not found');
+            }
 
-                if (countryOption) {
-                    countrySelect.value = countryOption.value;
-                    
-                    // Trigger HTMX request for cities
-                    htmx.trigger(countrySelect, 'change');
-                    
-                    // Wait for cities to load and select the correct city
-                    setTimeout(() => {
-                        const citySelect = document.getElementById('city');
-                        if (citySelect) {
-                            const cityOptions = Array.from(citySelect.options);
-                            const cityOption = cityOptions.find(option => 
-                                option.text.toLowerCase().includes(location.name.toLowerCase())
-                            );
-                            
-                            if (cityOption) {
-                                citySelect.value = cityOption.value;
-                                htmx.trigger(citySelect, 'change');
-                            }
+            const location = data[0];
+            
+            // Find and select the country
+            const countryOption = Array.from(countrySelect.options)
+                .find(option => option.text.toLowerCase().includes(location.country.toLowerCase()));
+            
+            if (countryOption) {
+                countrySelect.value = countryOption.value;
+                
+                // Trigger the HTMX request manually
+                htmx.trigger(countrySelect, 'change');
+                
+                // Wait for cities to load and select the correct city
+                setTimeout(async () => {
+                    const citySelect = document.getElementById('city');
+                    if (citySelect) {
+                        const cityOption = Array.from(citySelect.options)
+                            .find(option => option.text.toLowerCase().includes(location.name.toLowerCase()));
+                        
+                        if (cityOption) {
+                            citySelect.value = cityOption.value;
+                            // Submit the form
+                            document.getElementById('weather-form').dispatchEvent(new Event('submit'));
+                        } else {
+                            showError('City not found in our database. Please select manually.');
                         }
-                    }, 1000);
-                } else {
-                    showError('Could not find your country in our database');
-                }
+                    }
+                }, 1000);
+            } else {
+                showError('Country not found in our database. Please select manually.');
             }
         } catch (error) {
-            showError('Error fetching location data: ' + error.message);
+            console.error('Error:', error);
+            showError('Error getting location details. Please try selecting manually.');
         }
     }
 
     function handleLocationError(error) {
+        let errorMessage;
         switch(error.code) {
             case error.PERMISSION_DENIED:
-                showError("Please allow location access to use this feature.");
+                errorMessage = "Please allow location access to use this feature.";
                 break;
             case error.POSITION_UNAVAILABLE:
-                showError("Location information is unavailable.");
+                errorMessage = "Location information is unavailable.";
                 break;
             case error.TIMEOUT:
-                showError("Location request timed out.");
+                errorMessage = "Location request timed out.";
                 break;
             default:
-                showError("An unknown error occurred.");
-                break;
+                errorMessage = "An error occurred while getting location.";
         }
+        showError(errorMessage);
     }
 
     detectLocationBtn.addEventListener('click', function(e) {
         e.preventDefault();
         if (navigator.geolocation) {
             detectLocationBtn.disabled = true;
-            detectLocationBtn.innerHTML = '<i class="bi bi-geo-alt"></i> Detecting location...';
-            navigator.geolocation.getCurrentPosition(handleLocation, handleLocationError, {
-                enableHighAccuracy: true,
-                timeout: 5000,
-                maximumAge: 0
-            });
+            detectLocationBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Getting location...';
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    handleLocation(position);
+                    detectLocationBtn.disabled = false;
+                    detectLocationBtn.innerHTML = '<i class="bi bi-geo-alt"></i> Use My Location';
+                },
+                (error) => {
+                    handleLocationError(error);
+                    detectLocationBtn.disabled = false;
+                    detectLocationBtn.innerHTML = '<i class="bi bi-geo-alt"></i> Use My Location';
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
         } else {
             showError("Geolocation is not supported by this browser.");
         }
